@@ -1,0 +1,16 @@
+[package]
+name = "bondingcurve"
+version = "1.0.0"
+authors = []
+
+[addresses]
+bondingcurve = "0xe839b729a89575c5930c1691b6817de70ecfb4cc229268108ee8eba64a4da792"
+
+[dev-addresses]
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "aptos-release-v1.8"
+subdir = "aptos-framework"
+
+[dev-dependencies]
