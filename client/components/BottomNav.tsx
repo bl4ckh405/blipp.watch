@@ -23,7 +23,7 @@ export const BottomNav: React.FC = () => {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-zinc-800 flex justify-between items-center px-6 py-3 z-30 pb-safe">
         <NavItem icon={<HomeIcon className="w-6 h-6" />} label="For You" active={currentPage === 'For You'} onClick={() => setCurrentPage('For You')} />
-        <NavItem icon={<DiamondIcon className="w-6 h-6" />} label="Alpha Feed" active={currentPage === 'Alpha Feed'} onClick={() => setCurrentPage('Alpha Feed')} />
+      {/* <NavItem icon={<DiamondIcon className="w-6 h-6" />} label="Alpha Feed" active={currentPage === 'Alpha Feed'} onClick={() => setCurrentPage('Alpha Feed')} /> */}
         
         {/* Centered LIVE button */}
         <div className="relative -top-4">
@@ -36,7 +36,7 @@ export const BottomNav: React.FC = () => {
         </div>
 
         <NavItem icon={<CompassIcon className="w-6 h-6" />} label="Explore" active={currentPage === 'Explore'} onClick={() => setCurrentPage('Explore')} />
-        <NavItem icon={<UserCircleIcon className="w-6 h-6" />} label="Profile" active={currentPage === 'Profile'} onClick={() => setCurrentPage('Profile')} />
+      {/* <NavItem icon={<UserCircleIcon className="w-6 h-6" />} label="Profile" active={currentPage === 'Profile'} onClick={() => setCurrentPage('Profile')} /> */}
     </nav>
   );
 };

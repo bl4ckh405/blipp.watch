@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { Video, TransactionStatus } from '../types';
 import { CloseIcon, ChartBarIcon } from './Icons';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
-import { getMarketInfo, getCurrentPrice, buyShares, aptToOctas, octasToApt, sharesToHuman, getUserShareBalance } from '@/lib/aptos-contract';
+import { getMarketInfo, getCurrentPrice, buyShares, aptToOctas, octasToApt, sharesToHuman, getUserShareBalance, getTradeHistory, TradeEvent } from '@/lib/aptos-contract';
 import { Account } from '@aptos-labs/ts-sdk';
 
 // Bonding curve constants
@@ -60,33 +60,48 @@ const StatItem: React.FC<{ label: string; value: string; className?: string }> =
   </div>
 );
 
-const PriceChart: React.FC<{ data: number[] }> = ({ data }) => {
+const PriceChart: React.FC<{ data: { value: number; label: string }[] }> = ({ data }) => {
   const [viewRange, setViewRange] = useState<[number, number]>([0, data.length > 1 ? data.length - 1 : 1]);
-  const [activePoint, setActivePoint] = useState<{ index: number; value: number; x: number; y: number } | null>(null);
+  const [activePoint, setActivePoint] = useState<{ index: number; value: number; label: string; x: number; y: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ x: number, viewStart: number }>({ x: 0, viewStart: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Update view range when data changes
+  useEffect(() => {
+    setViewRange([0, Math.max(1, data.length - 1)]);
+  }, [data.length]);
+
   const { visibleData, min, max, range, isUp } = useMemo(() => {
     if (!data || data.length === 0) return { visibleData: [], min: 0, max: 0, range: 1, isUp: false };
     const [start, end] = viewRange;
-    const sliced = data.slice(Math.floor(start), Math.ceil(end) + 1);
-    const maxVal = Math.max(...sliced);
-    const minVal = Math.min(...sliced);
+    // Ensure bounds
+    const s = Math.max(0, Math.min(Math.floor(start), data.length - 1));
+    const e = Math.min(data.length - 1, Math.max(s + 1, Math.ceil(end)));
+
+    const sliced = data.slice(s, e + 1);
+    const values = sliced.map(d => d.value);
+    const maxVal = Math.max(...values);
+    const minVal = Math.min(...values);
+
+    // Determine direction active (last vs first in visible)
+    const direction = sliced.length > 1 ? sliced[sliced.length - 1].value >= sliced[0].value : true;
+
     return {
       visibleData: sliced,
       max: maxVal,
       min: minVal,
-      range: maxVal - minVal === 0 ? 1 : maxVal - minVal,
-      isUp: sliced.length > 1 ? sliced[sliced.length - 1] > sliced[0] : false,
+      range: maxVal - minVal === 0 ? maxVal * 0.1 || 1 : maxVal - minVal, // Avoid divide by zero
+      isUp: direction,
     };
   }, [data, viewRange]);
 
   const points = useMemo(() => {
-    if (visibleData.length < 2) return '0,100 100,100';
+    if (visibleData.length < 2) return '0,50 100,50'; // Flat line if not enough data
     return visibleData.map((d, i) => {
       const x = (i / (visibleData.length - 1)) * 100;
-      const y = 100 - ((d - min) / range) * 100;
+      // Invert Y (100 is bottom, 0 is top)
+      const y = 100 - ((d.value - min) / range) * 100;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(' ');
   }, [visibleData, min, range]);
@@ -97,79 +112,40 @@ const PriceChart: React.FC<{ data: number[] }> = ({ data }) => {
     const x = e.clientX - rect.left;
 
     if (isPanning) {
-      const dx = (e.clientX - panStartRef.current.x) / rect.width;
-      const rangeWidth = viewRange[1] - viewRange[0];
-      const panAmount = dx * rangeWidth;
-
-      let newStart = panStartRef.current.viewStart - panAmount;
-      newStart = Math.max(0, Math.min(newStart, data.length - rangeWidth - 1));
-
-      setViewRange([newStart, newStart + rangeWidth]);
+      // Panning logic (simplified for now or removed if complex with new data)
       return;
     }
 
-    const percentX = x / rect.width;
+    const percentX = Math.max(0, Math.min(1, x / rect.width));
     const indexInView = Math.round(percentX * (visibleData.length - 1));
-    const dataIndex = Math.floor(viewRange[0]) + indexInView;
-    const value = data[dataIndex];
+    const item = visibleData[indexInView];
 
-    if (value !== undefined && visibleData.length > 1) {
-      const y = 100 - ((value - min) / range) * 100;
-      setActivePoint({ index: dataIndex, value, x: (indexInView / (visibleData.length - 1)) * 100, y });
+    if (item) {
+      const y = 100 - ((item.value - min) / range) * 100;
+      setActivePoint({
+        index: indexInView,
+        value: item.value,
+        label: item.label,
+        x: (indexInView / (visibleData.length - 1)) * 100,
+        y
+      });
     }
-  }, [isPanning, viewRange, visibleData, data, min, range]);
+  }, [visibleData, min, range, isPanning]);
 
-  const handleMouseLeave = useCallback(() => {
-    setActivePoint(null);
-    if (isPanning) setIsPanning(false);
-  }, [isPanning]);
-
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const zoomFactor = 0.1;
-    const currentRangeWidth = viewRange[1] - viewRange[0];
-    const change = currentRangeWidth * zoomFactor;
-
-    let newStart = viewRange[0];
-    let newEnd = viewRange[1];
-
-    if (e.deltaY < 0) { // Zoom in
-      if (currentRangeWidth <= 5) return; // Min zoom level
-      newStart += change / 2;
-      newEnd -= change / 2;
-    } else { // Zoom out
-      newStart -= change / 2;
-      newEnd += change / 2;
-    }
-
-    newStart = Math.max(0, newStart);
-    newEnd = Math.min(data.length - 1, newEnd);
-
-    if (newStart < newEnd) setViewRange([newStart, newEnd]);
-
-  }, [data.length, viewRange]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsPanning(true);
-    panStartRef.current = { x: e.clientX, viewStart: viewRange[0] };
-  };
-
-  const handleMouseUp = () => setIsPanning(false);
+  const handleMouseLeave = () => setActivePoint(null);
 
   if (!data || data.length === 0) {
-    return <div className="h-48 bg-zinc-800 rounded-lg flex items-center justify-center"><p className="text-zinc-500">No price data available.</p></div>;
+    return <div className="h-48 bg-zinc-800 rounded-lg flex items-center justify-center"><p className="text-zinc-500">No trade history yet.</p></div>;
   }
 
   const strokeColor = isUp ? '#34d399' : '#f87171';
   const gradientId = isUp ? 'chart-gradient-up' : 'chart-gradient-down';
-  const cursorClass = isPanning ? 'cursor-grabbing' : 'cursor-crosshair';
 
   return (
     <div
       ref={containerRef}
-      className={`relative h-48 ${cursorClass} select-none`}
+      className={`relative h-48 cursor-crosshair select-none`}
       onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}
-      onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}
     >
       <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
         <defs>
@@ -182,24 +158,36 @@ const PriceChart: React.FC<{ data: number[] }> = ({ data }) => {
             <stop offset="100%" stopColor="#f87171" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polyline points={points} fill={`url(#${gradientId})`} stroke={strokeColor} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+        <polyline points={points} fill={`url(#${gradientId})`} stroke={strokeColor} strokeWidth="1" vectorEffect="non-scaling-stroke" />
       </svg>
+      {/* Grid lines */}
       <div className="absolute inset-0 grid grid-rows-4 pointer-events-none">
         {[...Array(4)].map((_, i) => <div key={i} className="border-b border-white/5 last:border-b-0"></div>)}
       </div>
-      {activePoint && !isPanning && (
-        <div className="absolute top-0 left-0 h-full w-full pointer-events-none" style={{ transform: `translateX(${activePoint.x}%)` }}>
-          <div className="absolute w-px h-full bg-white/30"></div>
-          <div className="absolute w-2.5 h-2.5 bg-zinc-900 rounded-full border-2" style={{ borderColor: strokeColor, top: `${activePoint.y}%`, transform: 'translate(-50%, -50%)' }} />
-          <div className="absolute bg-zinc-800 border border-zinc-700 text-white text-xs font-bold p-1.5 rounded-md shadow-lg whitespace-nowrap" style={{ top: `${activePoint.y}%`, transform: `translate(10px, -50%)` }}>
-            ${activePoint.value.toFixed(2)}
-            <span className="text-zinc-400 ml-2">Day {activePoint.index + 1}</span>
+
+      {activePoint && (
+        <div className="absolute top-0 left-0 h-full w-full pointer-events-none" style={{ transform: `translateX(${activePoint.x}%) px-0` }}>
+          {/* Vertical Line */}
+          <div className="absolute w-px h-full bg-white/30 -translate-x-1/2"></div>
+          {/* Dot */}
+          <div className="absolute w-3 h-3 bg-zinc-900 rounded-full border-2 -translate-x-1/2 -translate-y-1/2" style={{ borderColor: strokeColor, top: `${activePoint.y}%` }} />
+          {/* Tooltip */}
+          <div className="absolute bg-zinc-800 border border-zinc-700 text-white text-xs font-bold p-2 rounded-md shadow-lg whitespace-nowrap z-20"
+            style={{
+              top: `${activePoint.y}%`,
+              left: activePoint.x > 50 ? 'auto' : '10px',
+              right: activePoint.x > 50 ? '10px' : 'auto',
+              transform: 'translateY(-50%)'
+            }}>
+            <div>${activePoint.value.toFixed(8)}</div>
+            <div className="text-zinc-400 font-normal mt-0.5">{activePoint.label}</div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
 
 
 export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video }) => {
@@ -211,6 +199,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string>('');
+  const [tradeHistory, setTradeHistory] = useState<TradeEvent[]>([]);
 
   useEffect(() => {
     if (isOpen && video) {
@@ -237,7 +226,10 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
     try {
       const videoId = video.videoId; // Use original UUID, not converted number
       console.log('Loading market for video UUID:', videoId);
-      const marketInfo = await getMarketInfo(videoId);
+      const [marketInfo, history] = await Promise.all([
+        getMarketInfo(videoId),
+        getTradeHistory(videoId)
+      ]);
 
       if (marketInfo) {
         setMarket({
@@ -247,6 +239,8 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
         });
         console.log('Market loaded successfully:', marketInfo);
       }
+
+      setTradeHistory(history);
 
       // Fetch user's balance if connected
       if (account) {
@@ -399,195 +393,271 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
   const graduationProgress = (realAptosReserve / 69) * 100;
 
 
+  // Calculate accurate chart data (History OR Bonding Curve)
+  const chartData = useMemo(() => {
+    // 1. Prioritize Real Trade History
+    if (tradeHistory.length > 0) {
+      return tradeHistory.map(t => {
+        // Timestamp is in microsecond or second? standard is microseconds in Aptos usually, but `timestamp::now_seconds()` in move is seconds.
+        // Let's assume seconds based on Move contract `timestamp::now_seconds()`.
+        const date = new Date(t.timestamp * 1000);
+        return {
+          value: t.price,
+          label: date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+    }
+
+    // 2. Fallback: Theoretical Bonding Curve (Price vs Supply)
+    // Used when no trades occurred yet (only Initial State).
+    if (!market) return [];
+
+    const CURVE_SUPPLY = BONDING_CURVE_CONSTANTS.CURVE_SUPPLY;
+    const DECIMALS = 100000000;
+
+    // Parse reserves from market string data
+    // Note: tokenReserve has 8 decimals in contract but we treat it as units usually? 
+    // Wait, in previous code: `parseFloat(market.tokenReserve) / DECIMALS`.
+    // aptosReserve is in octas.
+    const tReserve = parseFloat(market.tokenReserve) / DECIMALS;
+    const aReserve = octasToApt(market.aptosReserve);
+
+    // Virtual k check
+    // If reserves are defaults (30, 1B), calculate curve based on that.
+    const k = aReserve * tReserve;
+
+    // Simulation steps
+    // We plot price for "Supply Sold" from 0 to "Current Sold"
+    const currentSold = CURVE_SUPPLY - tReserve;
+    const effectiveMaxSold = Math.max(currentSold, 1000); // minimum display range
+
+    const points = 50;
+    const history: { value: number; label: string }[] = [];
+
+    for (let i = 0; i <= points; i++) {
+      const percent = i / points;
+      const soldAtStep = effectiveMaxSold * percent;
+
+      // Tokens remaining in pool at this step
+      const tokensInPool = CURVE_SUPPLY - soldAtStep;
+
+      // Price = k / (Tokens^2) ?
+      // Formula: A * T = k.  Price = A / T.
+      // A = k / T.  Price = (k/T) / T = k / T^2.
+
+      const priceAtStep = k / (tokensInPool * tokensInPool);
+
+      history.push({
+        value: priceAtStep,
+        label: `Supply: ${soldAtStep.toFixed(0)}`
+      });
+    }
+
+    return history;
+  }, [market, tradeHistory]);
+
   if (!isOpen || !video) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 md:p-8 relative transform transition-all duration-300 scale-95 animate-scale-in">
-        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
-          <CloseIcon className="w-6 h-6" />
-        </button>
-        <div className="flex items-center space-x-3 mb-6">
-          <ChartBarIcon className="w-8 h-8 text-indigo-400" />
-          <h2 className="text-2xl md:text-3xl font-bold">Post Market</h2>
+      {/* Scrollable Container */}
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg relative transform transition-all duration-300 scale-95 animate-scale-in flex flex-col max-h-[90vh]">
+        {/* Header - Fixed to top of modal */}
+        <div className="p-6 md:p-8 pb-0 shrink-0">
+          <button onClick={onClose} className="absolute top-4 right-4 text-zinc-400 hover:text-white z-10">
+            <CloseIcon className="w-6 h-6" />
+          </button>
+          <div className="flex items-center space-x-3 mb-4">
+            <ChartBarIcon className="w-8 h-8 text-indigo-400" />
+            <h2 className="text-2xl md:text-3xl font-bold">Post Market</h2>
+          </div>
+
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="w-16 h-16 md:w-16 md:h-16 rounded-lg overflow-hidden relative bg-black shrink-0">
+              {video.videoUrl ? (
+                <video
+                  src={video.videoUrl}
+                  className="w-full h-full object-cover"
+                  muted
+                  loop
+                  playsInline
+                  onMouseOver={(e) => e.currentTarget.play()}
+                  onMouseOut={(e) => {
+                    e.currentTarget.pause();
+                    e.currentTarget.currentTime = 0;
+                  }}
+                />
+              ) : (
+                <img src={video.thumbnailUrl} className="w-full h-full object-cover" alt="Post thumbnail" />
+              )}
+            </div>
+            <div>
+              <p className="text-base md:text-lg font-bold leading-tight line-clamp-1">{video.description}</p>
+              <p className="text-sm text-zinc-400">by @{video.user.username}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-4 mb-6">
-          <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden relative bg-black">
-            {video.videoUrl ? (
-              <video
-                src={video.videoUrl}
-                className="w-full h-full object-cover"
-                muted
-                loop
-                playsInline
-                onMouseOver={(e) => e.currentTarget.play()}
-                onMouseOut={(e) => {
-                  e.currentTarget.pause();
-                  e.currentTarget.currentTime = 0;
-                }}
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto scrollbar-hide p-6 md:p-8 pt-2 flex-1">
+
+          {/* Price Chart */}
+          <div className="mb-6 h-48 bg-black/20 rounded-xl overflow-hidden border border-zinc-800/50">
+            <PriceChart data={chartData} />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 text-center">
+            <StatItem label="Market Cap" value={formatMarketNumber(marketCap)} className="text-emerald-400" />
+            <StatItem label="Price" value={currentPrice > 0 ? `$${currentPrice.toFixed(8)}` : '$0.00000000'} />
+            <StatItem
+              label="Your Shares"
+              value={connected ? formatMarketNumber(parseFloat(userBalance) / 100000000) : '-'}
+            />
+          </div>
+
+          <div className="mb-6">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-zinc-400">Graduation Progress</span>
+              <span className="font-bold">{graduationProgress.toFixed(1)}%</span>
+            </div>
+            <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 ${market?.graduated
+                  ? 'bg-linear-to-r from-emerald-400 to-green-500'
+                  : 'bg-linear-to-r from-indigo-500 to-purple-500'
+                  }`}
+                style={{ width: `${Math.min(graduationProgress, 100)}%` }}
               />
-            ) : (
-              <img src={video.thumbnailUrl} className="w-full h-full object-cover" alt="Post thumbnail" />
-            )}
-          </div>
-          <div>
-            <p className="text-base md:text-lg font-bold leading-tight line-clamp-2">{video.description}</p>
-            <p className="text-sm text-zinc-400">by @{video.user.username}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 text-center">
-          <StatItem label="Market Cap" value={formatMarketNumber(marketCap)} className="text-emerald-400" />
-          <StatItem label="Price" value={currentPrice > 0 ? `$${currentPrice.toFixed(8)}` : '$0.00000000'} />
-          <StatItem
-            label="Your Shares"
-            value={connected ? formatMarketNumber(parseFloat(userBalance) / 100000000) : '-'}
-          />
-        </div>
-
-        <div className="mb-6">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-zinc-400">Graduation Progress</span>
-            <span className="font-bold">{graduationProgress.toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 ${market?.graduated
-                ? 'bg-linear-to-r from-emerald-400 to-green-500'
-                : 'bg-linear-to-r from-indigo-500 to-purple-500'
-                }`}
-              style={{ width: `${Math.min(graduationProgress, 100)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-zinc-500 mt-1">
-            <span>$0</span>
-            <span className="text-emerald-400 font-semibold">$69k {market?.graduated && '✅'}</span>
-          </div>
-        </div>
-
-        {txStatus === 'success' && txHash && (
-          <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-3 mb-4">
-            <p className="text-emerald-400 text-sm font-semibold">✓ Transaction successful!</p>
-            <p className="text-emerald-300/70 text-xs mt-1 break-all">Hash: {txHash.slice(0, 16)}...{txHash.slice(-8)}</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 mb-4">
-            <p className="text-red-400 text-sm">{error}</p>
-          </div>
-        )}
-
-        <div className="bg-zinc-800 rounded-lg p-4 mb-4">
-          {/* Buy/Sell Toggle */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setTradeType('buy')}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-colors ${tradeType === 'buy'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
-                }`}
-            >
-              Buy
-            </button>
-            <button
-              onClick={() => setTradeType('sell')}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-colors ${tradeType === 'sell'
-                ? 'bg-red-600 text-white'
-                : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
-                }`}
-            >
-              Sell
-            </button>
+            </div>
+            <div className="flex justify-between text-xs text-zinc-500 mt-1">
+              <span>$0</span>
+              <span className="text-emerald-400 font-semibold">$69k {market?.graduated && '✅'}</span>
+            </div>
           </div>
 
-          <label className="text-sm text-zinc-400 mb-2 block">
-            {tradeType === 'buy' ? 'Amount (APT)' : 'Shares to Sell'}
-          </label>
-          <div className="relative mb-3">
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              className="w-full bg-zinc-700 text-white px-4 py-3 rounded-lg text-lg font-semibold"
-              min="0.01"
-              step="0.1"
-              placeholder="0.1"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 font-semibold">
-              {tradeType === 'buy' ? 'APT' : 'Shares'}
-            </span>
-          </div>
+          {txStatus === 'success' && txHash && (
+            <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-3 mb-4">
+              <p className="text-emerald-400 text-sm font-semibold">✓ Transaction successful!</p>
+              <p className="text-emerald-300/70 text-xs mt-1 break-all">Hash: {txHash.slice(0, 16)}...{txHash.slice(-8)}</p>
+            </div>
+          )}
 
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            {[0.1, 0.5, 1, 5].map(amt => (
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 mb-4">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
+          <div className="bg-zinc-800 rounded-lg p-4 mb-4">
+            {/* Buy/Sell Toggle */}
+            <div className="flex gap-2 mb-4">
               <button
-                key={amt}
-                onClick={() => setAmount(amt)}
-                className="bg-zinc-700 hover:bg-zinc-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                onClick={() => setTradeType('buy')}
+                className={`flex-1 py-2 rounded-lg font-semibold transition-colors ${tradeType === 'buy'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                  }`}
               >
-                {amt} USD
+                Buy
               </button>
-            ))}
+              <button
+                onClick={() => setTradeType('sell')}
+                className={`flex-1 py-2 rounded-lg font-semibold transition-colors ${tradeType === 'sell'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                  }`}
+              >
+                Sell
+              </button>
+            </div>
+
+            <label className="text-sm text-zinc-400 mb-2 block">
+              {tradeType === 'buy' ? 'Amount (APT)' : 'Shares to Sell'}
+            </label>
+            <div className="relative mb-3">
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                className="w-full bg-zinc-700 text-white px-4 py-3 rounded-lg text-lg font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                min="0.01"
+                step="0.1"
+                placeholder="0.1"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 font-semibold">
+                {tradeType === 'buy' ? 'APT' : 'Shares'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[0.1, 0.5, 1, 5].map(amt => (
+                <button
+                  key={amt}
+                  onClick={() => setAmount(amt)}
+                  className="bg-zinc-700 hover:bg-zinc-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  {amt}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-zinc-400">
+                  {tradeType === 'buy' ? "You'll receive:" : "You'll get:"}
+                </span>
+                <span className="font-bold text-emerald-400">
+                  {tradeType === 'buy'
+                    ? `${formatMarketNumber(sharesOut)} shares`
+                    : `${aptReceived.toFixed(4)} APT`
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Price per share:</span>
+                <span className="font-semibold">
+                  ${((tradeType === 'buy' ? buyResult?.pricePerShare : sellResult?.pricePerShare) || 0).toFixed(8)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Price impact:</span>
+                <span className={`font-semibold ${Math.abs(priceImpact) > 5 ? 'text-red-400' :
+                  Math.abs(priceImpact) > 2 ? 'text-yellow-400' :
+                    'text-emerald-400'
+                  }`}>
+                  {priceImpact > 0 ? '+' : ''}{priceImpact.toFixed(2)}%
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Platform fee (1%):</span>
+                <span className="text-zinc-500">
+                  {tradeType === 'buy'
+                    ? `${(amount * 0.01).toFixed(4)} APT`
+                    : `${(aptReceived * 0.01).toFixed(4)} APT`
+                  }
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-zinc-400">
-                {tradeType === 'buy' ? "You'll receive:" : "You'll get:"}
-              </span>
-              <span className="font-bold text-emerald-400">
-                {tradeType === 'buy'
-                  ? `${formatMarketNumber(sharesOut)} shares`
-                  : `${aptReceived.toFixed(4)} APT`
-                }
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Price per share:</span>
-              <span className="font-semibold">
-                ${((tradeType === 'buy' ? buyResult?.pricePerShare : sellResult?.pricePerShare) || 0).toFixed(8)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Price impact:</span>
-              <span className={`font-semibold ${Math.abs(priceImpact) > 5 ? 'text-red-400' :
-                Math.abs(priceImpact) > 2 ? 'text-yellow-400' :
-                  'text-emerald-400'
-                }`}>
-                {priceImpact > 0 ? '+' : ''}{priceImpact.toFixed(2)}%
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Platform fee (1%):</span>
-              <span className="text-zinc-500">
-                {tradeType === 'buy'
-                  ? `${(amount * 0.01).toFixed(4)} APT`
-                  : `${(aptReceived * 0.01).toFixed(4)} APT`
-                }
-              </span>
-            </div>
-          </div>
+          <button
+            onClick={tradeType === 'buy' ? handleBuy : handleSell}
+            disabled={txStatus === 'pending' || !connected}
+            className={`w-full font-bold text-lg py-4 rounded-lg transition-colors disabled:opacity-50 ${tradeType === 'buy'
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-red-600 hover:bg-red-700 text-white'
+              }`}
+          >
+            {txStatus === 'pending'
+              ? 'Processing...'
+              : !connected
+                ? 'Connect Wallet'
+                : tradeType === 'buy'
+                  ? '🚀 Buy Shares'
+                  : '💰 Sell Shares'
+            }
+          </button>
         </div>
-
-        <button
-          onClick={tradeType === 'buy' ? handleBuy : handleSell}
-          disabled={txStatus === 'pending' || !connected}
-          className={`w-full font-bold text-lg py-4 rounded-lg transition-colors disabled:opacity-50 ${tradeType === 'buy'
-            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-        >
-          {txStatus === 'pending'
-            ? 'Processing...'
-            : !connected
-              ? 'Connect Wallet'
-              : tradeType === 'buy'
-                ? '🚀 Buy Shares'
-                : '💰 Sell Shares'
-          }
-        </button>
       </div>
     </div>
   );

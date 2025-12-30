@@ -61,7 +61,7 @@ export const Sidebar: React.FC = () => {
     <aside className="hidden md:flex flex-col w-64 bg-black p-4 border-r border-zinc-800 space-y-6">
       <nav className="space-y-2">
         <NavItem icon={<HomeIcon className="w-7 h-7" />} label="For You" active={currentPage === 'For You'} onClick={() => setCurrentPage('For You')} />
-        <NavItem icon={<DiamondIcon className="w-7 h-7" />} label="Alpha Feed" active={currentPage === 'Alpha Feed'} onClick={() => setCurrentPage('Alpha Feed')} />
+        {/* <NavItem icon={<DiamondIcon className="w-7 h-7" />} label="Alpha Feed" active={currentPage === 'Alpha Feed'} onClick={() => setCurrentPage('Alpha Feed')} /> */}
         <NavItem icon={<CompassIcon className="w-7 h-7" />} label="Explore" active={currentPage === 'Explore'} onClick={() => setCurrentPage('Explore')} />
         <NavItem icon={<LiveIcon className="w-7 h-7 text-rose-500" />} label="LIVE" active={currentPage === 'LIVE'} onClick={() => setCurrentPage('LIVE')} />
       </nav>

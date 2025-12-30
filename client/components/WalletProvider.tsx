@@ -46,8 +46,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       dappConfig={{
         network: Network.TESTNET,
       }}
-      onError={(error) => {
-        console.error('Wallet error:', error)
+      onError={(error: any) => {
+        // Suppress "User has rejected the request" errors as they are expected when user cancels
+        const msg = typeof error === 'string' ? error : error?.message || String(error);
+        if (msg.includes('rejected') || msg.includes('User has rejected')) {
+          console.warn('Wallet action rejected by user');
+          return;
+        }
+        console.error('Wallet error:', error);
       }}
     >
       <WalletContextProvider>

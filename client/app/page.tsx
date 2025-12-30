@@ -125,19 +125,19 @@ function App() {
             hasMore={hasMore}
           />
         );
-      case "Alpha Feed":
-        // Filter videos for followed users for this feed
-        const followedVideos = videos.filter((v) =>
-          followedUsers.has(v.user.username)
-        );
-        return (
-          <AlphaFeedPage
-            videos={followedVideos}
-            loadMore={loadMore}
-            isLoading={isLoading}
-            hasMore={hasMore && followedUsers.size > 0}
-          />
-        );
+      // case "Alpha Feed":
+      //   // Filter videos for followed users for this feed
+      //   const followedVideos = videos.filter((v) =>
+      //     followedUsers.has(v.user.username)
+      //   );
+      //   return (
+      //     <AlphaFeedPage
+      //       videos={followedVideos}
+      //       loadMore={loadMore}
+      //       isLoading={isLoading}
+      //       hasMore={hasMore && followedUsers.size > 0}
+      //     />
+      //   );
       case "Explore":
         return <ExplorePage />;
       case "LIVE":
@@ -159,7 +159,7 @@ function App() {
         <Sidebar />
         
         {/* Main Content Area - Full height, no padding on mobile for immersive video */}
-        <main className="flex-1 flex flex-col relative overflow-hidden w-full md:w-auto">
+        <main className="flex-1 flex flex-col relative overflow-hidden w-full md:w-auto pb-[60px] md:pb-0">
           {renderPage()}
         </main>
 

@@ -20,7 +20,7 @@ interface VideoPlayerProps {
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
-  const { isMuted, setIsMuted, openMarketModal, openCommentsModal } = useAppContext();
+  const { isMuted, setIsMuted, openMarketModal, openCommentsModal, setCurrentPage, setSelectedProfileUsername } = useAppContext();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasViewedRef = useRef(false);
   const [isPaused, setIsPaused] = useState(true);
@@ -28,12 +28,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => 
   const [hasLiked, setHasLiked] = useState(false);
   const [commentCount, setCommentCount] = useState(video.comments || 0);
 
-  // Reset view tracking when video changes
+  // Reset view tracking and load like state when video changes
   useEffect(() => {
     hasViewedRef.current = false;
+
+    // Load persisted like state
+    const storageKey = `liked_${video.videoId}`;
+    const persistedLike = localStorage.getItem(storageKey) === 'true';
+
     setLikes(video.likes);
-    setHasLiked(false);
-  }, [video.id]);
+    setHasLiked(persistedLike);
+  }, [video.videoId, video.likes]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -97,6 +102,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => 
     // Prevent double-liking
     if (hasLiked) return;
 
+    // Persist locally immediately
+    const storageKey = `liked_${video.videoId}`;
+    localStorage.setItem(storageKey, 'true');
+
     // Optimistic update
     setLikes(likes + 1);
     setHasLiked(true);
@@ -109,6 +118,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => 
       }
     } catch (error) {
       // Revert on error
+      localStorage.removeItem(storageKey);
       setLikes(likes);
       setHasLiked(false);
       console.error('Failed to like video:', error);
@@ -156,51 +166,58 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => 
       )}
 
       {/* User Info & Description - Hidden on larger screens as it's in the DetailsColumn */}
-      <div className="absolute bottom-16 md:bottom-4 left-0 p-4 text-white w-full lg:hidden pointer-events-none pr-20" style={textShadowStyle}>
-        <div className="flex items-center mb-2">
-          <img src={video.user.avatarUrl} className="w-10 h-10 rounded-full border-2 border-white" alt={video.user.username} />
-          <p className="font-bold ml-3 text-lg">@{video.user.username}</p>
+      <div className="absolute bottom-8 md:bottom-4 left-0 p-4 text-white w-full lg:hidden pointer-events-none pr-16" style={textShadowStyle}>
+        <div
+          className="flex items-center mb-1 pointer-events-auto cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedProfileUsername(video.user.username);
+            setCurrentPage('Profile');
+          }}
+        >
+          <img src={video.user.avatarUrl} className="w-8 h-8 rounded-full border-2 border-white" alt={video.user.username} />
+          <p className="font-bold ml-2 text-base shadow-black drop-shadow-md">@{video.user.username}</p>
         </div>
-        <p className="text-sm mb-2">{video.description}</p>
+        <p className="text-xs mb-1 line-clamp-2 shadow-black drop-shadow-md">{video.description}</p>
         <div className="flex items-center">
-          <MusicNoteIcon className="w-5 h-5" />
-          <p className="text-sm ml-2">{video.songTitle}</p>
+          <MusicNoteIcon className="w-3 h-3" />
+          <p className="text-xs ml-2 shadow-black drop-shadow-md">{video.songTitle}</p>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="absolute bottom-28 md:bottom-20 right-2 flex flex-col items-center space-y-5 text-white pointer-events-auto">
+      {/* Action Buttons - Compacted for Mobile */}
+      <div className="absolute bottom-0 right-2 flex flex-col items-center space-y-3 text-white pointer-events-auto pb-8 md:pb-8">
         <div className="flex flex-col items-center cursor-pointer group" onClick={handleLikeClick}>
-          <button className={`backdrop-blur-md p-3 rounded-full transition-all duration-200 group-hover:scale-110 ${hasLiked
+          <button className={`backdrop-blur-md p-2 rounded-full transition-all duration-200 active:scale-95 ${hasLiked
             ? 'bg-rose-500'
             : 'bg-black/30 group-hover:bg-rose-500'
             }`}>
-            <HeartIcon className={`w-8 h-8 ${hasLiked ? 'fill-white' : ''}`} />
+            <HeartIcon className={`w-7 h-7 ${hasLiked ? 'fill-white' : ''}`} />
           </button>
-          <span className="text-sm font-semibold mt-1" style={textShadowStyle}>{formatCount(likes)}</span>
+          <span className="text-xs font-semibold mt-0.5" style={textShadowStyle}>{formatCount(likes)}</span>
         </div>
         <div className="flex flex-col items-center cursor-pointer group" onClick={handleCommentClick}>
-          <button className="bg-black/30 backdrop-blur-md p-3 rounded-full group-hover:bg-emerald-500 transition-all duration-200 group-hover:scale-110">
-            <CommentIcon className="w-8 h-8" />
+          <button className="bg-black/30 backdrop-blur-md p-2 rounded-full group-hover:bg-emerald-500 transition-all duration-200 active:scale-95">
+            <CommentIcon className="w-7 h-7" />
           </button>
-          <span className="text-sm font-semibold mt-1" style={textShadowStyle}>{formatCount(commentCount)}</span>
+          <span className="text-xs font-semibold mt-0.5" style={textShadowStyle}>{formatCount(commentCount)}</span>
         </div>
         {video.isTradeable && (
           <div className="flex flex-col items-center cursor-pointer group" onClick={handleMarketClick}>
-            <button className="bg-black/30 backdrop-blur-md p-3 rounded-full group-hover:bg-indigo-500 transition-all duration-200 group-hover:scale-110">
-              <ChartBarIcon className="w-8 h-8" />
+            <button className="bg-black/30 backdrop-blur-md p-2 rounded-full group-hover:bg-indigo-500 transition-all duration-200 active:scale-95">
+              <ChartBarIcon className="w-7 h-7" />
             </button>
-            <span className="text-sm font-semibold mt-1" style={textShadowStyle}>Market</span>
+            <span className="text-xs font-semibold mt-0.5" style={textShadowStyle}>Market</span>
           </div>
         )}
         <div className="flex flex-col items-center cursor-pointer group" onClick={handleShareClick}>
-          <button className="bg-black/30 backdrop-blur-md p-3 rounded-full group-hover:bg-sky-500 transition-all duration-200 group-hover:scale-110">
-            <ShareIcon className="w-8 h-8" />
+          <button className="bg-black/30 backdrop-blur-md p-2 rounded-full group-hover:bg-sky-500 transition-all duration-200 active:scale-95">
+            <ShareIcon className="w-7 h-7" />
           </button>
-          <span className="text-sm font-semibold mt-1" style={textShadowStyle}>{formatCount(video.shares)}</span>
+          <span className="text-xs font-semibold mt-0.5" style={textShadowStyle}>{formatCount(video.shares)}</span>
         </div>
-        <div className="animate-spin-slow mt-4">
-          <img src={video.user.avatarUrl} className="w-12 h-12 rounded-full border-2 border-gray-800" alt="song cover" />
+        <div className="animate-spin-slow mt-2">
+          <img src={video.user.avatarUrl} className="w-10 h-10 rounded-full border-2 border-gray-800" alt="song cover" />
         </div>
       </div>
     </div>
