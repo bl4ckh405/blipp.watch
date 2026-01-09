@@ -5,7 +5,7 @@ import { CloseIcon, VideoCameraIcon, CheckIcon } from './Icons';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { supabase } from '@/lib/supabase';
 import { createVideo, updateVideoMarket } from '@/lib/video-service';
-import { initializeMarket } from '@/lib/aptos-contract';
+import { initializeMarket, CONTRACT_ADDRESS, MODULE_NAME } from '@/lib/aptos-contract';
 import { Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
 
 interface VideoUploadModalProps {
@@ -125,7 +125,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
           const response = await signAndSubmitTransaction({
             sender: account.address,
             data: {
-              function: `0xe839b729a89575c5930c1691b6817de70ecfb4cc229268108ee8eba64a4da792::bonding_curve::initialize_market`,
+              function: `${CONTRACT_ADDRESS}::${MODULE_NAME}::initialize_market`,
               functionArguments: [videoData.id],
             },
           });

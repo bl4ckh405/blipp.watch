@@ -141,6 +141,9 @@ module bondingcurve::bonding_curve {
         let object_signer = object::generate_signer(&constructor_ref);
         let market_address = signer::address_of(&object_signer);
 
+        // Register market object for AptosCoin to receive payments
+        coin::register<AptosCoin>(&object_signer);
+
         // Create fungible asset for shares with primary store enabled
         // Truncate video_id to first 8 chars to stay under 32 char limit
         let truncated_id = string::sub_string(&video_id, 0, 8);
@@ -204,7 +207,7 @@ module bondingcurve::bonding_curve {
         );
     }
 
-    /// Buy shares with APT payment
+    /// Buy shares with MOVE payment
     public entry fun buy_shares(
         buyer: &signer, video_id: String, apt_amount: u64
     ) acquires MarketRegistry, Market {
@@ -223,7 +226,13 @@ module bondingcurve::bonding_curve {
         // Check not graduated
         assert!(!market.graduated, E_MARKET_GRADUATED);
 
-        // Transfer APT from buyer to market object
+        // Auto-fix: Ensure market is registered for AptosCoin so it can receive payments
+        let market_signer = object::generate_signer_for_extending(&market.extend_ref);
+        if (!coin::is_account_registered<AptosCoin>(signer::address_of(&market_signer))) {
+            coin::register<AptosCoin>(&market_signer);
+        };
+
+        // Transfer MOVE from buyer to market object
         coin::transfer<AptosCoin>(buyer, market_address, apt_amount);
 
         // Calculate and transfer platform fee (1%)
@@ -290,7 +299,7 @@ module bondingcurve::bonding_curve {
         );
     }
 
-    /// Sell shares back to bonding curve for APT
+    /// Sell shares back to bonding curve for MOVE
     public entry fun sell_shares(
         seller: &signer, video_id: String, share_amount: u64
     ) acquires MarketRegistry, Market {
@@ -314,7 +323,7 @@ module bondingcurve::bonding_curve {
             primary_fungible_store::withdraw(seller, market.asset_metadata, share_amount);
         fungible_asset::burn(&market.burn_ref, fa);
 
-        // Calculate APT payout
+        // Calculate MOVE payout
         let apt_out =
             math_utils::calculate_apt_out(
                 market.aptos_reserve,
@@ -327,11 +336,11 @@ module bondingcurve::bonding_curve {
             math_utils::apply_fee(apt_out, math_utils::get_creator_fee_bps());
         let seller_amount = apt_out - creator_fee;
 
-        // Transfer APT to seller (90%)
+        // Transfer MOVE to seller (90%)
         let market_signer = object::generate_signer_for_extending(&market.extend_ref);
         coin::transfer<AptosCoin>(&market_signer, seller_addr, seller_amount);
 
-        // Transfer APT to creator (10%)
+        // Transfer MOVE to creator (10%)
         if (creator_fee > 0) {
             coin::transfer<AptosCoin>(&market_signer, market.creator, creator_fee);
         };
@@ -423,11 +432,23 @@ module bondingcurve::bonding_curve {
         let metadata =
             object::address_to_object<fungible_asset::Metadata>(market_address);
 
-        // Get the user's primary fungible store for this asset
-        let store = primary_fungible_store::primary_store(user_address, metadata);
-
-        // Return the balance
-        fungible_asset::balance(store)
+        // Use the safe balance helper which returns 0 if store doesn't exist
+        primary_fungible_store::balance(user_address, metadata)
+    }
+    /// Fix for existing markets: register them for AptosCoin
+    public entry fun fix_market_coin_registration(
+        video_id: String
+    ) acquires MarketRegistry, Market {
+        let registry = borrow_global<MarketRegistry>(@bondingcurve);
+        assert!(table::contains(&registry.markets, video_id), E_MARKET_NOT_FOUND);
+        let market_address = *table::borrow(&registry.markets, video_id);
+        
+        let market = borrow_global<Market>(market_address);
+        
+        let object_signer = object::generate_signer_for_extending(&market.extend_ref);
+        if (!coin::is_account_registered<AptosCoin>(signer::address_of(&object_signer))) {
+            coin::register<AptosCoin>(&object_signer);
+        };
     }
 }
 

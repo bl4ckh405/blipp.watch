@@ -63,7 +63,7 @@ export const LivePage: React.FC = () => {
 
   // Post-Stream Modal State
   const [showPricingModal, setShowPricingModal] = useState(false);
-  const [replayPrice, setReplayPrice] = useState(2); // Default 2 APT
+  const [replayPrice, setReplayPrice] = useState(2); // Default 2 MOVE
   const [recordedBlobs, setRecordedBlobs] = useState<{ video: Blob, thumbnail: Blob } | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -338,7 +338,7 @@ export const LivePage: React.FC = () => {
         description: 'Live Stream Replay',
         video_url: videoUrl,
         preview_url: thumbUrl,
-        price_amount: replayPrice * 100000000 // Convert APT to Octas
+        price_amount: replayPrice * 100000000 // Convert MOVE to Octas
       });
 
       // 4. Cleanup
@@ -632,7 +632,7 @@ export const LivePage: React.FC = () => {
             <p className="text-zinc-400 mb-6">Publish the replay to Explore? Set a price for viewers.</p>
             
             <div className="mb-6">
-              <label className="block text-sm font-bold text-zinc-300 mb-2">Price (APT)</label>
+              <label className="block text-sm font-bold text-zinc-300 mb-2">Price (MOVE)</label>
               <input 
                 type="number" 
                 value={replayPrice} 

@@ -14,7 +14,7 @@
     "@aptos-labs/wallet-adapter-react": "^7.2.7",
     "@google/genai": "^1.34.0",
     "@supabase/supabase-js": "^2.89.0",
-    "next": "15.5.7",
+    "next": "16.1.1",
     "peerjs": "^1.5.5",
     "petra-plugin-wallet-adapter": "^0.4.5",
     "react": "19.2.3",

@@ -3,8 +3,8 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Video, TransactionStatus } from '../types';
 import { CloseIcon, ChartBarIcon } from './Icons';
-import { useWallet } from '@aptos-labs/wallet-adapter-react';
-import { getMarketInfo, getCurrentPrice, buyShares, aptToOctas, octasToApt, sharesToHuman, getUserShareBalance, getTradeHistory, TradeEvent } from '@/lib/aptos-contract';
+import { useWallet } from './WalletProvider';
+import { getMarketInfo, getCurrentPrice, buyShares, sellShares, aptToOctas, octasToApt, sharesToHuman, getUserShareBalance, getTradeHistory, TradeEvent, CONTRACT_ADDRESS, MODULE_NAME, getMarketAddress } from '@/lib/aptos-contract';
 import { Account } from '@aptos-labs/ts-sdk';
 
 // Bonding curve constants
@@ -188,8 +188,6 @@ const PriceChart: React.FC<{ data: { value: number; label: string }[] }> = ({ da
   );
 };
 
-
-
 export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video }) => {
   const { account, connected, signAndSubmitTransaction } = useWallet();
   const [market, setMarket] = useState<any>(null);
@@ -238,16 +236,18 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
           tokenReserve: marketInfo.tokenReserve,
         });
         console.log('Market loaded successfully:', marketInfo);
+
+        // Fetch user's balance if connected AND market exists
+        if (account) {
+          const balance = await getUserShareBalance(videoId, account.address.toString());
+          setUserBalance(balance);
+          console.log('User balance:', balance);
+        }
+      } else {
+        setUserBalance('0');
       }
 
       setTradeHistory(history);
-
-      // Fetch user's balance if connected
-      if (account) {
-        const balance = await getUserShareBalance(videoId, account.address.toString());
-        setUserBalance(balance);
-        console.log('User balance:', balance);
-      }
     } catch (err: any) {
       console.error('Failed to load market:', err);
 
@@ -256,7 +256,52 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
         setError('Market not yet created for this video. The creator needs to initialize trading first.');
       } else {
         setError('Failed to load market data. Please try again.');
+        // Show simplified error if user is offline or network error
       }
+    }
+  };
+
+  const handleFixMarket = async () => {
+    if (!video || !connected || !account) return;
+
+    setTxStatus('pending');
+    setError(null);
+    setTxHash('');
+
+    try {
+      const videoId = video.videoId;
+      console.log('Fixing market for video UUID:', videoId);
+
+      // 1. Get Market Address
+      const marketAddress = await getMarketAddress(videoId!);
+      if (!marketAddress) {
+        throw new Error("Market address not found on chain");
+      }
+      console.log("Target Market Address:", marketAddress);
+
+      // 2. Fund it to create Account Resource (0.01 MOVE)
+      // This is required because the Object was created without an Account resource,
+      // and coin::register requires it.
+      const response = await signAndSubmitTransaction({
+        sender: account.address,
+        data: {
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [marketAddress, "1000000"], // 0.01 MOVE
+        },
+      });
+
+      if (response?.hash) {
+        setTxStatus('success');
+        setTxHash(response.hash || '');
+        console.log('Fix market successful:', response.hash);
+        alert('Market Initialized! You can now trade.');
+        // Reload market data
+        setTimeout(() => loadMarketData(), 2000);
+      }
+    } catch (err: any) {
+      setTxStatus('error');
+      setError(err.message || 'Fix failed');
+      console.error('Fix failed:', err);
     }
   };
 
@@ -282,7 +327,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
       const response = await signAndSubmitTransaction({
         sender: account.address,
         data: {
-          function: `0xe839b729a89575c5930c1691b6817de70ecfb4cc229268108ee8eba64a4da792::bonding_curve::buy_shares`,
+          function: `${CONTRACT_ADDRESS}::${MODULE_NAME}::buy_shares`,
           functionArguments: [videoId, aptAmount],
         },
       });
@@ -324,15 +369,15 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
     try {
       const videoId = video.videoId; // Use original UUID
       console.log('Selling shares for video UUID:', videoId);
-      // Convert amount (in APT worth) to number of shares to sell
-      // For now, user inputs APT amount they want to receive
+      // Convert amount (in MOVE worth) to number of shares to sell
+      // For now, user inputs MOVE amount they want to receive
       const sharesToSell = Math.floor(amount * 100000000); // Convert to smallest units
 
       // Submit transaction using wallet adapter
       const response = await signAndSubmitTransaction({
         sender: account.address,
         data: {
-          function: `0xe839b729a89575c5930c1691b6817de70ecfb4cc229268108ee8eba64a4da792::bonding_curve::sell_shares`,
+          function: `${CONTRACT_ADDRESS}::${MODULE_NAME}::sell_shares`,
           functionArguments: [videoId, sharesToSell.toString()],
         },
       });
@@ -355,7 +400,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
   // Token reserve is stored with DECIMALS (8 decimals)
   const DECIMALS = 100000000; // 10^8
   const tokenReserve = market ? parseFloat(market.tokenReserve) / DECIMALS : BONDING_CURVE_CONSTANTS.CURVE_SUPPLY;
-  const aptosReserve = market ? octasToApt(market.aptosReserve) : 30; // Initial virtual reserve is 30 APT
+  const aptosReserve = market ? octasToApt(market.aptosReserve) : 30; // Initial virtual reserve is 30 MOVE
 
   // Calculate current price: price = aptosReserve / tokenReserve
   const currentPrice = tokenReserve > 0 ? aptosReserve / tokenReserve : 0;
@@ -369,7 +414,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
     ? calculateSellAmount(amount, aptosReserve, tokenReserve)
     : null;
 
-  // Shares out for buy, APT out for sell
+  // Shares out for buy, MOVE out for sell
   const sharesOut = buyResult?.sharesOut || 0;
   const aptReceived = sellResult?.aptOut || 0;
 
@@ -387,9 +432,9 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
   const totalSold = BONDING_CURVE_CONSTANTS.CURVE_SUPPLY - tokenReserve;
   const marketCap = currentPrice * totalSold;
 
-  // Graduation progress based on real APT reserve (not virtual)
-  // Graduation threshold is 69 APT of real reserves
-  const realAptosReserve = aptosReserve - 30; // Subtract virtual 30 APT
+  // Graduation progress based on real MOVE reserve (not virtual)
+  // Graduation threshold is 69 MOVE of real reserves
+  const realAptosReserve = aptosReserve - 30; // Subtract virtual 30 MOVE
   const graduationProgress = (realAptosReserve / 69) * 100;
 
 
@@ -572,7 +617,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
             </div>
 
             <label className="text-sm text-zinc-400 mb-2 block">
-              {tradeType === 'buy' ? 'Amount (APT)' : 'Shares to Sell'}
+              {tradeType === 'buy' ? 'Amount (MOVE)' : 'Shares to Sell'}
             </label>
             <div className="relative mb-3">
               <input
@@ -585,7 +630,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
                 placeholder="0.1"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 font-semibold">
-                {tradeType === 'buy' ? 'APT' : 'Shares'}
+                {tradeType === 'buy' ? 'MOVE' : 'Shares'}
               </span>
             </div>
 
@@ -609,7 +654,7 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
                 <span className="font-bold text-emerald-400">
                   {tradeType === 'buy'
                     ? `${formatMarketNumber(sharesOut)} shares`
-                    : `${aptReceived.toFixed(4)} APT`
+                    : `${aptReceived.toFixed(4)} MOVE`
                   }
                 </span>
               </div>
@@ -632,8 +677,8 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
                 <span className="text-zinc-400">Platform fee (1%):</span>
                 <span className="text-zinc-500">
                   {tradeType === 'buy'
-                    ? `${(amount * 0.01).toFixed(4)} APT`
-                    : `${(aptReceived * 0.01).toFixed(4)} APT`
+                    ? `${(amount * 0.01).toFixed(4)} MOVE`
+                    : `${(aptReceived * 0.01).toFixed(4)} MOVE`
                   }
                 </span>
               </div>
@@ -657,10 +702,17 @@ export const MarketModal: React.FC<MarketModalProps> = ({ isOpen, onClose, video
                   : '💰 Sell Shares'
             }
           </button>
+
+          <div className="mt-4 text-center">
+            <button
+              onClick={handleFixMarket}
+              className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+            >
+              Repair Market Connection (Fix CoinStore Error)
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-

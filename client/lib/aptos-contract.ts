@@ -5,10 +5,15 @@ export const CONTRACT_ADDRESS = '0xe839b729a89575c5930c1691b6817de70ecfb4cc22926
 export const MODULE_NAME = 'bonding_curve';
 
 // Network configuration
-const NETWORK = Network.TESTNET; // Change to MAINNET when ready
+// Network configuration
+const NETWORK = Network.CUSTOM;
+const MOVEMENT_FULLNODE = 'https://testnet.movementnetwork.xyz/v1';
 
 // Initialize Aptos client
-const aptosConfig = new AptosConfig({ network: NETWORK });
+const aptosConfig = new AptosConfig({
+  network: NETWORK,
+  fullnode: MOVEMENT_FULLNODE
+});
 const aptos = new Aptos(aptosConfig);
 
 // Export aptos instance for use in components
@@ -74,7 +79,7 @@ export async function initializeMarket(
  * Buy shares in a video market
  * @param account - User's account (signer)
  * @param videoId - Video identifier
- * @param aptAmount - Amount of APT to spend (in octas, 1 APT = 10^8 octas)
+ * @param aptAmount - Amount of MOVE to spend (in octas, 1 MOVE = 10^8 octas)
  */
 export async function buyShares(
   account: Account,
@@ -155,6 +160,46 @@ export async function sellShares(
 }
 
 /**
+ * Fix market coin registration (for existing markets)
+ * @param account - User's account (signer)
+ * @param videoId - Video identifier
+ */
+export async function fixMarket(
+  account: Account,
+  videoId: string
+): Promise<TransactionResult> {
+  try {
+    const transaction = await aptos.transaction.build.simple({
+      sender: account.accountAddress,
+      data: {
+        function: `${CONTRACT_ADDRESS}::${MODULE_NAME}::fix_market_coin_registration`,
+        functionArguments: [videoId],
+      },
+    });
+
+    const committedTransaction = await aptos.signAndSubmitTransaction({
+      signer: account,
+      transaction,
+    });
+
+    const executedTransaction = await aptos.waitForTransaction({
+      transactionHash: committedTransaction.hash,
+    });
+
+    return {
+      success: executedTransaction.success,
+      hash: committedTransaction.hash,
+    };
+  } catch (error: any) {
+    console.error('Fix market error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to fix market',
+    };
+  }
+}
+
+/**
  * Get market information for a video
  * @param videoId - Video identifier
  * @returns Market info or null if market doesn't exist
@@ -179,7 +224,22 @@ export async function getMarketInfo(videoId: string): Promise<MarketInfo | null>
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
+    const errorString = JSON.stringify(error);
+    if (
+      (error.message && (
+        error.message.includes('EOBJECT_DOES_NOT_EXIST') ||
+        error.message.includes('0x60002') ||
+        error.message.includes('393218') ||
+        error.message.includes('ABORTED') ||
+        error.message.includes('Bad Request') ||
+        String(error.status) === '400'
+      )) ||
+      errorString.includes('393218') ||
+      errorString.includes('ABORTED')
+    ) {
+      return null;
+    }
     console.error('Get market info error:', error);
     return null;
   }
@@ -204,7 +264,20 @@ export async function getCurrentPrice(videoId: string): Promise<string | null> {
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
+    const errorString = JSON.stringify(error);
+    if (
+      (error.message && (
+        error.message.includes('EOBJECT_DOES_NOT_EXIST') ||
+        error.message.includes('0x60002') ||
+        error.message.includes('393218') ||
+        error.message.includes('ABORTED')
+      )) ||
+      errorString.includes('393218') ||
+      errorString.includes('ABORTED')
+    ) {
+      return null;
+    }
     console.error('Get current price error:', error);
     return null;
   }
@@ -230,7 +303,20 @@ export async function getUserShareBalance(videoId: string, userAddress: string):
     }
 
     return '0';
-  } catch (error) {
+  } catch (error: any) {
+    const errorString = JSON.stringify(error);
+    if (
+      (error.message && (
+        error.message.includes('EOBJECT_DOES_NOT_EXIST') ||
+        error.message.includes('0x60002') ||
+        error.message.includes('393218') ||
+        error.message.includes('ABORTED')
+      )) ||
+      errorString.includes('393218') ||
+      errorString.includes('ABORTED')
+    ) {
+      return '0';
+    }
     console.error('Get user share balance error:', error);
     return '0';
   }
@@ -255,7 +341,20 @@ export async function marketExists(videoId: string): Promise<boolean> {
     }
 
     return false;
-  } catch (error) {
+  } catch (error: any) {
+    const errorString = JSON.stringify(error);
+    if (
+      (error.message && (
+        error.message.includes('EOBJECT_DOES_NOT_EXIST') ||
+        error.message.includes('0x60002') ||
+        error.message.includes('393218') ||
+        error.message.includes('ABORTED')
+      )) ||
+      errorString.includes('393218') ||
+      errorString.includes('ABORTED')
+    ) {
+      return false;
+    }
     console.error('Market exists error:', error);
     return false;
   }
@@ -280,7 +379,20 @@ export async function getMarketAddress(videoId: string): Promise<string | null> 
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
+    const errorString = JSON.stringify(error);
+    if (
+      (error.message && (
+        error.message.includes('EOBJECT_DOES_NOT_EXIST') ||
+        error.message.includes('0x60002') ||
+        error.message.includes('393218') ||
+        error.message.includes('ABORTED')
+      )) ||
+      errorString.includes('393218') ||
+      errorString.includes('ABORTED')
+    ) {
+      return null;
+    }
     console.error('Get market address error:', error);
     return null;
   }
@@ -289,14 +401,14 @@ export async function getMarketAddress(videoId: string): Promise<string | null> 
 // Helper functions for calculations
 
 /**
- * Convert APT to octas (1 APT = 10^8 octas)
+ * Convert MOVE to octas (1 MOVE = 10^8 octas)
  */
 export function aptToOctas(apt: number): number {
   return Math.floor(apt * 100_000_000);
 }
 
 /**
- * Convert octas to APT
+ * Convert octas to MOVE
  */
 export function octasToApt(octas: number | string): number {
   return Number(octas) / 100_000_000;

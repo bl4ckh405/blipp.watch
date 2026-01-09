@@ -34,7 +34,7 @@ export const WalletButton: React.FC = () => {
         <div className="flex flex-col items-start">
           <span className="text-sm">{truncatedAddress}</span>
           {balanceAPT !== null && (
-            <span className="text-xs text-emerald-400">{balanceAPT.toFixed(2)} APT</span>
+            <span className="text-xs text-emerald-400">{balanceAPT.toFixed(2)} MOVE</span>
           )}
         </div>
       </button>
@@ -48,7 +48,7 @@ export const WalletButton: React.FC = () => {
           <div className="p-4 border-b border-zinc-700">
             <p className="text-xs text-zinc-400">Balance</p>
             <p className="text-lg font-bold text-emerald-400">
-              {balanceAPT !== null ? `${balanceAPT.toFixed(4)} APT` : 'Loading...'}
+              {balanceAPT !== null ? `${balanceAPT.toFixed(4)} MOVE` : 'Loading...'}
             </p>
           </div>
           <button

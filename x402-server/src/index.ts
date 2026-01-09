@@ -30,7 +30,7 @@ const DEFAULT_PAY_TO = "0x31f5919930f6e458c819172627d8a691e77757b3ae847a1eb7c215
 // We define the middleware logic directly in the route chain to preserve full path visibility
 app.get("/api/premium/:videoId",
     async (req, res, next) => {
-        const price = (req.query.price as string) || "200000000"; // Default 2 APT
+        const price = (req.query.price as string) || "200000000"; // Default 2 MOVE
         const recipient = (req.query.recipient as string) || process.env.MOVEMENT_PAY_TO || DEFAULT_PAY_TO;
         const videoId = req.params.videoId;
 
@@ -42,7 +42,7 @@ app.get("/api/premium/:videoId",
 
             try {
                 // Query Aptos Testnet Fullnode directly
-                const nodeUrl = "https://api.testnet.aptoslabs.com/v1";
+                const nodeUrl = "https://testnet.movementnetwork.xyz/v1";
                 const response = await fetch(`${nodeUrl}/transactions/by_hash/${hash}`);
 
                 if (response.ok) {

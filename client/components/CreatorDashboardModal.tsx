@@ -8,7 +8,7 @@ import { VideoUploadModal } from './VideoUploadModal';
 import { useWallet } from './WalletProvider';
 import { getUserByWallet } from '@/lib/supabase-auth';
 import { getVideosByCreator, VideoData, updateVideoMarket } from '@/lib/video-service';
-import { initializeMarket, getMarketAddress } from '@/lib/aptos-contract';
+import { initializeMarket, getMarketAddress, CONTRACT_ADDRESS, MODULE_NAME } from '@/lib/aptos-contract';
 
 interface CreatorDashboardModalProps {
   isOpen: boolean;
@@ -140,7 +140,7 @@ export const CreatorDashboardModal: React.FC<CreatorDashboardModalProps> = ({ is
       const response = await signAndSubmitTransaction({
         sender: account.address,
         data: {
-          function: `0xe839b729a89575c5930c1691b6817de70ecfb4cc229268108ee8eba64a4da792::bonding_curve::initialize_market`,
+          function: `${CONTRACT_ADDRESS}::${MODULE_NAME}::initialize_market`,
           functionArguments: [videoId],
         },
       });

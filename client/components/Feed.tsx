@@ -70,7 +70,7 @@ export const Feed: React.FC<FeedProps> = ({ videos, loadMore, isLoading, hasMore
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full md:max-w-sm md:aspect-[9/16] md:max-h-[85vh] rounded-none md:rounded-2xl overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
+      className="relative w-full h-full md:max-w-sm md:aspect-[9/16] md:max-h-[85vh] rounded-none md:rounded-2xl overflow-y-scroll snap-y snap-mandatory scrollbar-hide mx-auto"
     >
       {videos.map((video, index) => {
         const isLastElement = videos.length === index + 1;

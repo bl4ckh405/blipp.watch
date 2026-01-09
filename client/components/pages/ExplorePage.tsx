@@ -120,7 +120,7 @@ export const ExplorePage: React.FC = () => {
         }
 
         try {
-            const result = await unlockContent(`http://localhost:4402/api/premium/${item.id}?price=${item.price_amount}&recipient=${item.creator_id}`);
+            const result = await unlockContent(`${process.env.NEXT_PUBLIC_X402_URL}/api/premium/${item.id}?price=${item.price_amount}&recipient=${item.creator_id}`);
 
             if (result) {
                 const { error } = await supabase.from('unlocked_access').insert({
@@ -280,7 +280,7 @@ export const ExplorePage: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full text-sm font-bold border border-emerald-500/30 text-emerald-400 shadow-lg">
-                                        {(item.price_amount / 100000000).toFixed(2)} APT
+                                        {(item.price_amount / 100000000).toFixed(2)} MOVE
                                     </div>
                                 </div>
                                 <div className="p-5">

@@ -20,7 +20,7 @@ const EarningsDisplay: React.FC<{ earnings: number }> = ({ earnings }) => (
 
 export const Header: React.FC = () => {
   const { openCreatorDashboard, isAuthenticated, currentUser, setCurrentUser } = useAppContext();
-  const { connected, walletAddress, balanceAPT } = useWallet();
+  const { connected, walletAddress, balanceAPT, disconnect } = useWallet();
   const earnings = 12.3456;
   const [showAuth, setShowAuth] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -102,8 +102,17 @@ export const Header: React.FC = () => {
             <span className="relative z-10">Creator Dashboard</span>
           </button>
           {mounted && isAuthenticated ? (
-            <div className="hidden md:flex items-center gap-2 text-white font-semibold text-sm px-4 py-1.5 rounded-full shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300 relative overflow-hidden group ">
-              <span className="text-zinc-400">@{currentUser?.username}</span>
+            <div className="hidden md:flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-full p-1 pl-4 pr-1">
+              <span className="text-zinc-400 font-semibold text-sm">@{currentUser?.username}</span>
+              <button
+                onClick={() => disconnect()}
+                className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-full transition-all"
+                title="Disconnect Wallet"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+                </svg>
+              </button>
             </div>
           ) : mounted ? (
             <button

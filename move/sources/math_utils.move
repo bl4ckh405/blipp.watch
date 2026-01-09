@@ -7,13 +7,13 @@ module bondingcurve::math_utils {
     /// Total supply in bonding curve: 800M shares with 8 decimals
     const CURVE_SUPPLY: u64 = 80_000_000_000_000_000;
     
-    /// Initial virtual APT reserve: 30 APT in octas (1 APT = 10^8 octas)
+    /// Initial virtual MOVE reserve: 30 MOVE in octas (1 MOVE = 10^8 octas)
     const INITIAL_VIRTUAL_APT: u64 = 3_000_000_000;
     
     /// Initial virtual token reserve: 800M shares with 8 decimals
     const INITIAL_VIRTUAL_TOKENS: u64 = 80_000_000_000_000_000;
     
-    /// Graduation threshold: 460 APT in octas (~$69k at $150/APT)
+    /// Graduation threshold: 460 MOVE in octas (~$69k at $150/MOVE)
     const GRADUATION_THRESHOLD: u64 = 46_000_000_000;
     
     /// Platform fee: 1% = 100 basis points
@@ -44,7 +44,7 @@ module bondingcurve::math_utils {
     
     // ===== Public Functions =====
     
-    /// Calculate shares to mint for APT input using constant product formula
+    /// Calculate shares to mint for MOVE input using constant product formula
     /// Formula: k = apt_reserve * token_reserve
     ///          new_apt = apt_reserve + apt_in
     ///          new_tokens = k / new_apt
@@ -72,7 +72,7 @@ module bondingcurve::math_utils {
         (shares_out as u64)
     }
     
-    /// Calculate APT to return for shares burned using constant product formula
+    /// Calculate MOVE to return for shares burned using constant product formula
     /// Formula: k = apt_reserve * token_reserve
     ///          new_tokens = token_reserve + shares_in
     ///          new_apt = k / new_tokens
@@ -91,7 +91,7 @@ module bondingcurve::math_utils {
         let new_tokens = (token_reserve as u128) + (shares_in as u128);
         let new_apt = k / new_tokens;
         
-        // Calculate APT out
+        // Calculate MOVE out
         let apt_out = (apt_reserve as u128) - new_apt;
         
         // Ensure we don't try to withdraw more than available
@@ -165,10 +165,10 @@ module bondingcurve::math_utils {
     
     #[test]
     fun test_calculate_shares_out_basic() {
-        // Test buying with 1 APT
+        // Test buying with 1 MOVE
         let apt_reserve = INITIAL_VIRTUAL_APT;
         let token_reserve = INITIAL_VIRTUAL_TOKENS;
-        let apt_in = 100_000_000; // 1 APT
+        let apt_in = 100_000_000; // 1 MOVE
         
         let shares = calculate_shares_out(apt_reserve, token_reserve, apt_in);
         
@@ -186,7 +186,7 @@ module bondingcurve::math_utils {
         
         let apt = calculate_apt_out(apt_reserve, token_reserve, shares_in);
         
-        // Should receive APT
+        // Should receive MOVE
         assert!(apt > 0, 0);
         assert!(apt < apt_reserve, 1);
     }
@@ -204,19 +204,19 @@ module bondingcurve::math_utils {
     
     #[test]
     fun test_apply_fee_platform() {
-        let amount = 100_000_000; // 1 APT
+        let amount = 100_000_000; // 1 MOVE
         let fee = apply_fee(amount, PLATFORM_FEE_BPS); // 1%
         
-        // 1% of 1 APT = 0.01 APT = 1,000,000 octas
+        // 1% of 1 MOVE = 0.01 MOVE = 1,000,000 octas
         assert!(fee == 1_000_000, 0);
     }
     
     #[test]
     fun test_apply_fee_creator() {
-        let amount = 100_000_000; // 1 APT
+        let amount = 100_000_000; // 1 MOVE
         let fee = apply_fee(amount, CREATOR_FEE_BPS); // 10%
         
-        // 10% of 1 APT = 0.1 APT = 10,000,000 octas
+        // 10% of 1 MOVE = 0.1 MOVE = 10,000,000 octas
         assert!(fee == 10_000_000, 0);
     }
     

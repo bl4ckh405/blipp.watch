@@ -17,7 +17,7 @@ export const CreatePremiumModal: React.FC<CreatePremiumModalProps> = ({ isOpen, 
     const [videoUrl, setVideoUrl] = useState('');
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [uploadMode, setUploadMode] = useState<'url' | 'file'>('file');
-    const [price, setPrice] = useState('1'); // Default 1 APT
+    const [price, setPrice] = useState('1'); // Default 1 MOVE
     const [isLoading, setIsLoading] = useState(false);
 
     if (!isOpen) return null;
@@ -114,7 +114,7 @@ export const CreatePremiumModal: React.FC<CreatePremiumModalProps> = ({ isOpen, 
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-zinc-400 mb-1">Price (APT)</label>
+                            <label className="block text-sm font-medium text-zinc-400 mb-1">Price (MOVE)</label>
                             <input
                                 type="number"
                                 required
