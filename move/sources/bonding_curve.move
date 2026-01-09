@@ -4,6 +4,7 @@ module bondingcurve::bonding_curve {
     use std::string::{Self, String};
     use std::signer;
     use std::option;
+    use aptos_framework::aptos_account;
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::object::{Self, Object, ExtendRef};
@@ -141,8 +142,9 @@ module bondingcurve::bonding_curve {
         let object_signer = object::generate_signer(&constructor_ref);
         let market_address = signer::address_of(&object_signer);
 
-        // Register market object for AptosCoin to receive payments
-        coin::register<AptosCoin>(&object_signer);
+        // Implicitly register market object for AptosCoin by transferring a tiny amount
+        // This automatically creates the account resource if it doesn't exist
+        aptos_account::transfer(creator, market_address, 100);
 
         // Create fungible asset for shares with primary store enabled
         // Truncate video_id to first 8 chars to stay under 32 char limit
