@@ -43,7 +43,7 @@ export const generateVideoIdea = async (topic: string): Promise<VideoIdea[]> => 
       },
     });
 
-    const jsonText = response.text.trim();
+    const jsonText = response.text!.trim();
     const parsed = JSON.parse(jsonText);
     
     if (parsed && Array.isArray(parsed.ideas)) {
