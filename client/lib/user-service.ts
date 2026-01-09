@@ -22,7 +22,7 @@ export async function getFollowingUsers(userId: string): Promise<UserProfile[]> 
     .select('following_id, users!follows_following_id_fkey(*)')
     .eq('follower_id', userId)
   
-  return data?.map(f => f.users).filter(Boolean) || []
+  return (data as any)?.map((f: any) => f.users as UserProfile).filter((u: unknown) => !!u) || []
 }
 
 export async function apeIntoUser(aperId: string, targetId: string): Promise<void> {
