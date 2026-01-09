@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import { aptos } from '../lib/aptos-contract';
 
 export interface X402Content {
   status: string;
@@ -107,11 +108,11 @@ export const useX402 = () => {
 
       // 3.5 Wait for Confirmation
       // Initialize a client to check confirmation
-      const client = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+      // const client = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
       try {
         console.log("⏳ Waiting for transaction confirmation...");
-        await client.waitForTransaction({ transactionHash: response.hash });
+        await aptos.waitForTransaction({ transactionHash: response.hash });
         console.log("✅ Transaction confirmed on-chain!");
       } catch (confirmErr) {
         console.warn("Wait for transaction failed or timed out, proceeding anyway...", confirmErr);
