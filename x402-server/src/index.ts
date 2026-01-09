@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 4402;
 const unlockedRooms = new Map<string, Set<string>>(); // videoId -> Set<walletAddress>
 
 app.use(cors({
-    origin: ["http://localhost:3000", "http://localhost:3001", "https://blippwatch.vercel.app/"],
+    origin: ["http://localhost:3000", "http://localhost:3001", "https://blippwatch.vercel.app"],
     exposedHeaders: ["X-PAYMENT-RESPONSE", "WWW-Authenticate"]
 }));
 
